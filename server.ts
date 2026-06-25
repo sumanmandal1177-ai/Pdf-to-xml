@@ -15,6 +15,63 @@ function cleanJsonText(text: string): string {
   return cleaned.trim();
 }
 
+async function generateContentWithRetryAndFallback(
+  ai: any,
+  params: {
+    contents: any;
+    config?: any;
+  }
+) {
+  const models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-latest"];
+  let lastError: any = null;
+
+  for (const model of models) {
+    let retries = 3;
+    let delay = 1000;
+
+    while (retries > 0) {
+      try {
+        console.log(`[Gemini API] Attempting generateContent with model: ${model} (retry try: ${4 - retries}/3)`);
+        const response = await ai.models.generateContent({
+          model,
+          ...params,
+        });
+        console.log(`[Gemini API] Successfully generated content using model: ${model}`);
+        return response;
+      } catch (error: any) {
+        lastError = error;
+        const errMsg = error.message || String(error);
+        const errStatus = error.status || error.code || "";
+        console.warn(`[Gemini API] Error with model ${model}:`, errMsg, "Status:", errStatus);
+
+        const is503 = String(errStatus) === "503" || 
+                      errMsg.includes("503") || 
+                      errMsg.includes("UNAVAILABLE") || 
+                      errMsg.includes("high demand") ||
+                      errMsg.includes("temporary") ||
+                      errMsg.includes("Spikes in demand");
+
+        const is429 = String(errStatus) === "429" || 
+                      errMsg.includes("429") || 
+                      errMsg.includes("RESOURCE_EXHAUSTED") || 
+                      errMsg.includes("rate limit");
+
+        if ((is503 || is429) && retries > 1) {
+          console.log(`[Gemini API] Transient error (503/429) detected. Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay *= 2;
+          retries--;
+        } else {
+          console.log(`[Gemini API] Moving on from model ${model} due to persistent error.`);
+          break;
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to generate content after exhausting all fallback models and retries.");
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -97,8 +154,7 @@ Ensure amounts are positive numbers.
 Bank statement raw text:
 ${statementText}`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await generateContentWithRetryAndFallback(ai, {
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -140,8 +196,7 @@ ${statementText}`;
       const cleanBase64 = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
 
       const ai = getAiClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await generateContentWithRetryAndFallback(ai, {
         contents: {
           parts: [
             {

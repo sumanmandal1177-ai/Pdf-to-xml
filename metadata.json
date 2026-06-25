@@ -1,6 +1,6 @@
 {
-  "name": "Bank Statement to Tally XML Converter",
-  "description": "An expert utility to parse and convert bank statement rows into Tally ERP 9 and TallyPrime compatible XML vouchers.",
+  "name": "Bank Statement to Tally XML Parser",
+  "description": "Convert bank statements (PDF, Excel, CSV, or text) into Tally XML format for direct accounting import.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
